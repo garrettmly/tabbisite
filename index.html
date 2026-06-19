@@ -1,0 +1,1421 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>tabbi — Split receipts with friends</title>
+  <meta name="description" content="Snap a photo of your receipt and drag items to each person. tabbi makes splitting the bill effortless.">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #FFFFFF;
+      --primary: #1C1C1E;
+      --muted: #6B6B70;
+      --btn-text: #FFFFFF;
+      --card: #FAFAFA;
+      --icon: #9B9B9B;
+      --border: #F0F0F0;
+      --card-border: #D4D4D4;
+      --radius: 16px;
+      --radius-sm: 12px;
+      --shadow: 0 1px 3px rgba(28, 28, 30, 0.06), 0 8px 24px rgba(28, 28, 30, 0.04);
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background: var(--bg);
+      color: var(--primary);
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    a { color: inherit; text-decoration: none; }
+
+    .container {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    /* Header */
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: rgba(255, 255, 255, 0.85);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .header-inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 72px;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 1.35rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    .logo img {
+      width: 40px;
+      height: 40px;
+      object-fit: contain;
+      mix-blend-mode: multiply;
+    }
+
+    nav {
+      display: flex;
+      align-items: center;
+      gap: 32px;
+    }
+
+    nav a {
+      font-size: 0.9375rem;
+      color: var(--muted);
+      transition: color 0.2s;
+    }
+
+    nav a:hover { color: var(--primary); }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 12px 24px;
+      background: var(--primary);
+      color: var(--btn-text);
+      font-size: 0.9375rem;
+      font-weight: 600;
+      border: none;
+      border-radius: 999px;
+      cursor: pointer;
+      transition: opacity 0.2s, transform 0.15s;
+    }
+
+    .btn:hover { opacity: 0.88; transform: translateY(-1px); }
+    .btn:active { transform: translateY(0); }
+
+    .btn-outline {
+      background: transparent;
+      color: var(--primary);
+      border: 1.5px solid var(--card-border);
+    }
+
+    .btn-outline:hover { background: var(--card); opacity: 1; }
+
+    /* Hero */
+    .hero {
+      padding: 80px 0 100px;
+      overflow: hidden;
+    }
+
+    .hero-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 48px;
+      align-items: center;
+    }
+
+    .hero h1 {
+      font-size: clamp(2.5rem, 5vw, 3.5rem);
+      font-weight: 800;
+      line-height: 1.1;
+      letter-spacing: -0.03em;
+      margin-bottom: 20px;
+    }
+
+    .hero p {
+      font-size: 1.125rem;
+      color: var(--muted);
+      max-width: 480px;
+      margin-bottom: 36px;
+    }
+
+    .hero-actions {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .hero-visual {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      position: relative;
+    }
+
+    .hero-demo {
+      --demo-dur: 10s;
+      width: min(380px, 92%);
+    }
+
+    .hero-phone {
+      background: var(--bg);
+      border: 1.5px solid var(--card-border);
+      border-radius: 32px;
+      padding: 14px;
+      box-shadow: var(--shadow), 0 24px 48px rgba(28, 28, 30, 0.08);
+    }
+
+    .hero-phone-body {
+      position: relative;
+      background: var(--card);
+      border-radius: 20px;
+      border: 1px solid var(--border);
+      min-height: 390px;
+      padding: 22px 20px 48px;
+      overflow: hidden;
+    }
+
+    .hero-scene {
+      position: absolute;
+      inset: 22px 20px 48px;
+      opacity: 0;
+    }
+
+    .scene-scan    { animation: show-scene var(--demo-dur) infinite 0s; }
+    .scene-friends  { animation: show-scene var(--demo-dur) infinite calc(var(--demo-dur) * 0.25); }
+    .scene-drag    { animation: show-scene var(--demo-dur) infinite calc(var(--demo-dur) * 0.5); }
+    .scene-totals  { animation: show-scene var(--demo-dur) infinite calc(var(--demo-dur) * 0.75); }
+
+    @keyframes show-scene {
+      0%, 22% { opacity: 1; }
+      25%, 100% { opacity: 0; }
+    }
+
+    .scene-label {
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--muted);
+      margin-bottom: 16px;
+    }
+
+    /* Scene 1: scan */
+    .scan-line {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 10px 12px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      font-size: 0.8125rem;
+      font-weight: 500;
+      margin-bottom: 8px;
+      opacity: 0;
+      transform: translateY(8px);
+      animation: scan-in var(--demo-dur) infinite;
+    }
+
+    .scan-line:nth-child(3) { animation-delay: 0.1s; }
+    .scan-line:nth-child(4) { animation-delay: 0.2s; }
+    .scan-line:nth-child(5) { animation-delay: 0.3s; }
+    .scan-line:nth-child(6) { animation-delay: 0.4s; }
+
+    .scan-line span:last-child {
+      color: var(--muted);
+      font-variant-numeric: tabular-nums;
+      flex-shrink: 0;
+    }
+
+    @keyframes scan-in {
+      0%, 3% { opacity: 0; transform: translateY(8px); }
+      6%, 22% { opacity: 1; transform: translateY(0); }
+      25%, 100% { opacity: 0; transform: translateY(8px); }
+    }
+
+    .scan-flash {
+      position: absolute;
+      inset: 0;
+      background: rgba(255, 255, 255, 0.7);
+      opacity: 0;
+      animation: camera-flash var(--demo-dur) infinite;
+      pointer-events: none;
+    }
+
+    @keyframes camera-flash {
+      0%, 1% { opacity: 0.8; }
+      3%, 100% { opacity: 0; }
+    }
+
+    /* Scene 2: friends */
+    .friend-add-bar {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+
+    .friend-input-field {
+      flex: 1;
+      position: relative;
+      display: flex;
+      align-items: center;
+      min-height: 42px;
+      padding: 0 12px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      font-size: 0.875rem;
+      font-weight: 500;
+    }
+
+    .friend-typing {
+      position: absolute;
+      left: 12px;
+      opacity: 0;
+    }
+
+    .friend-typing.t1 { animation: typing-1 var(--demo-dur) infinite; }
+    .friend-typing.t2 { animation: typing-2 var(--demo-dur) infinite; }
+    .friend-typing.t3 { animation: typing-3 var(--demo-dur) infinite; }
+    .friend-typing.t4 { animation: typing-4 var(--demo-dur) infinite; }
+
+    @keyframes typing-1 {
+      0%, 24.9% { opacity: 0; }
+      25%, 28.5% { opacity: 1; }
+      29%, 100% { opacity: 0; }
+    }
+
+    @keyframes typing-2 {
+      0%, 29.9% { opacity: 0; }
+      30%, 33.5% { opacity: 1; }
+      34%, 100% { opacity: 0; }
+    }
+
+    @keyframes typing-3 {
+      0%, 34.9% { opacity: 0; }
+      35%, 38.5% { opacity: 1; }
+      39%, 100% { opacity: 0; }
+    }
+
+    @keyframes typing-4 {
+      0%, 39.9% { opacity: 0; }
+      40%, 43.5% { opacity: 1; }
+      44%, 100% { opacity: 0; }
+    }
+
+    .typing-cursor {
+      position: absolute;
+      top: 50%;
+      margin-top: -8px;
+      width: 2px;
+      height: 16px;
+      background: var(--primary);
+      opacity: 0;
+      animation: cursor-blink var(--demo-dur) infinite, cursor-move var(--demo-dur) infinite;
+    }
+
+    @keyframes cursor-move {
+      0%, 24.9% { left: 12px; }
+      25%, 28.5% { left: 48px; }
+      29%, 29.9% { left: 12px; }
+      30%, 33.5% { left: 62px; }
+      34%, 34.9% { left: 12px; }
+      35%, 38.5% { left: 44px; }
+      39%, 39.9% { left: 12px; }
+      40%, 43.5% { left: 68px; }
+      44%, 100% { left: 12px; }
+    }
+
+    @keyframes cursor-blink {
+      0%, 24.9% { opacity: 0; }
+      25%, 48% { opacity: 1; }
+      48.1%, 100% { opacity: 0; }
+    }
+
+    .friend-add-btn {
+      flex-shrink: 0;
+      padding: 0 16px;
+      min-height: 42px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--primary);
+      color: var(--btn-text);
+      border-radius: 10px;
+      font-size: 0.8125rem;
+      font-weight: 600;
+      animation: add-btn-tap var(--demo-dur) infinite;
+    }
+
+    @keyframes add-btn-tap {
+      0%, 27.9% { transform: scale(1); }
+      28%, 28.5% { transform: scale(0.94); }
+      29%, 32.9% { transform: scale(1); }
+      33%, 33.5% { transform: scale(0.94); }
+      34%, 37.9% { transform: scale(1); }
+      38%, 38.5% { transform: scale(0.94); }
+      39%, 42.9% { transform: scale(1); }
+      43%, 43.5% { transform: scale(0.94); }
+      44%, 100% { transform: scale(1); }
+    }
+
+    .friends-added-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .friend-added {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 11px 13px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      font-size: 0.875rem;
+      font-weight: 500;
+      opacity: 0;
+      transform: translateY(-12px);
+    }
+
+    .friend-added .avatar {
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      background: var(--primary);
+      color: var(--btn-text);
+      font-size: 0.6875rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .friend-added .added-badge {
+      margin-left: auto;
+      font-size: 0.6875rem;
+      font-weight: 600;
+      color: var(--muted);
+      opacity: 0;
+    }
+
+    .friend-added.a1 { animation: friend-in-1 var(--demo-dur) infinite; }
+    .friend-added.a2 { animation: friend-in-2 var(--demo-dur) infinite; }
+    .friend-added.a3 { animation: friend-in-3 var(--demo-dur) infinite; }
+    .friend-added.a4 { animation: friend-in-4 var(--demo-dur) infinite; }
+
+    .friend-added.a1 .added-badge { animation: badge-pop var(--demo-dur) infinite; }
+    .friend-added.a2 .added-badge { animation: badge-pop-2 var(--demo-dur) infinite; }
+    .friend-added.a3 .added-badge { animation: badge-pop-3 var(--demo-dur) infinite; }
+    .friend-added.a4 .added-badge { animation: badge-pop-4 var(--demo-dur) infinite; }
+
+    @keyframes friend-in-1 {
+      0%, 27.9% { opacity: 0; transform: translateY(-12px); }
+      28.5%, 48% { opacity: 1; transform: translateY(0); }
+      50%, 100% { opacity: 0; transform: translateY(-12px); }
+    }
+
+    @keyframes friend-in-2 {
+      0%, 32.9% { opacity: 0; transform: translateY(-12px); }
+      33.5%, 48% { opacity: 1; transform: translateY(0); }
+      50%, 100% { opacity: 0; transform: translateY(-12px); }
+    }
+
+    @keyframes friend-in-3 {
+      0%, 37.9% { opacity: 0; transform: translateY(-12px); }
+      38.5%, 48% { opacity: 1; transform: translateY(0); }
+      50%, 100% { opacity: 0; transform: translateY(-12px); }
+    }
+
+    @keyframes friend-in-4 {
+      0%, 42.9% { opacity: 0; transform: translateY(-12px); }
+      43.5%, 48% { opacity: 1; transform: translateY(0); }
+      50%, 100% { opacity: 0; transform: translateY(-12px); }
+    }
+
+    @keyframes badge-pop {
+      0%, 28.4% { opacity: 0; transform: scale(0.8); }
+      29%, 48% { opacity: 1; transform: scale(1); }
+      50%, 100% { opacity: 0; }
+    }
+
+    @keyframes badge-pop-2 {
+      0%, 33.4% { opacity: 0; transform: scale(0.8); }
+      34%, 48% { opacity: 1; transform: scale(1); }
+      50%, 100% { opacity: 0; }
+    }
+
+    @keyframes badge-pop-3 {
+      0%, 38.4% { opacity: 0; transform: scale(0.8); }
+      39%, 48% { opacity: 1; transform: scale(1); }
+      50%, 100% { opacity: 0; }
+    }
+
+    @keyframes badge-pop-4 {
+      0%, 43.4% { opacity: 0; transform: scale(0.8); }
+      44%, 48% { opacity: 1; transform: scale(1); }
+      50%, 100% { opacity: 0; }
+    }
+
+    /* Scene 3: drag */
+    .drag-items {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-bottom: 18px;
+    }
+
+    .drag-item {
+      display: flex;
+      justify-content: space-between;
+      padding: 10px 12px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      font-size: 0.8125rem;
+      font-weight: 500;
+    }
+
+    .drag-item.moving {
+      position: relative;
+      z-index: 2;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 1px var(--primary);
+      animation: drag-move var(--demo-dur) infinite calc(var(--demo-dur) * 0.5);
+    }
+
+    .drag-item .price {
+      color: var(--muted);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .drag-zone {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 14px;
+      border: 1.5px dashed var(--card-border);
+      border-radius: 10px;
+      font-size: 0.8125rem;
+      color: var(--muted);
+      animation: zone-highlight var(--demo-dur) infinite calc(var(--demo-dur) * 0.5);
+    }
+
+    .drag-zone .avatar {
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      background: var(--primary);
+      color: var(--btn-text);
+      font-size: 0.6875rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    @keyframes drag-move {
+      0%, 52% { transform: translateY(0); opacity: 1; }
+      58%, 70% { transform: translateY(82px); opacity: 1; }
+      74%, 100% { transform: translateY(82px); opacity: 0; }
+    }
+
+    @keyframes zone-highlight {
+      0%, 56% { border-color: var(--card-border); background: transparent; color: var(--muted); }
+      60%, 72% { border-color: var(--primary); background: rgba(28, 28, 30, 0.04); color: var(--primary); }
+      76%, 100% { border-color: var(--card-border); background: transparent; color: var(--muted); }
+    }
+
+    /* Scene 4: totals */
+    .total-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 11px 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.875rem;
+      opacity: 0;
+      transform: translateX(-6px);
+      animation: total-in var(--demo-dur) infinite;
+    }
+
+    .total-row:nth-child(3) { animation-delay: calc(var(--demo-dur) * 0.765); }
+    .total-row:nth-child(4) { animation-delay: calc(var(--demo-dur) * 0.78); }
+    .total-row:nth-child(5) { animation-delay: calc(var(--demo-dur) * 0.795); }
+
+    .total-row .person {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 500;
+    }
+
+    .total-row .person .avatar {
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      background: var(--primary);
+      color: var(--btn-text);
+      font-size: 0.6875rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .total-row .amount {
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .total-row:last-child { border-bottom: none; }
+
+    @keyframes total-in {
+      0%, 74% { opacity: 0; transform: translateX(-6px); }
+      78%, 97% { opacity: 1; transform: translateX(0); }
+      100% { opacity: 0; transform: translateX(-6px); }
+    }
+
+    .demo-dots {
+      position: absolute;
+      bottom: 18px;
+      left: 0;
+      right: 0;
+      display: flex;
+      justify-content: center;
+      gap: 6px;
+    }
+
+    .demo-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--card-border);
+      animation: dot-active var(--demo-dur) infinite;
+    }
+
+    .demo-dot:nth-child(1) { animation-delay: 0s; }
+    .demo-dot:nth-child(2) { animation-delay: calc(var(--demo-dur) * 0.25); }
+    .demo-dot:nth-child(3) { animation-delay: calc(var(--demo-dur) * 0.5); }
+    .demo-dot:nth-child(4) { animation-delay: calc(var(--demo-dur) * 0.75); }
+
+    @keyframes dot-active {
+      0%, 22% { background: var(--primary); transform: scale(1.2); }
+      25%, 100% { background: var(--card-border); transform: scale(1); }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .hero-scene,
+      .scan-line,
+      .scan-flash,
+      .friend-typing,
+      .typing-cursor,
+      .friend-add-btn,
+      .friend-added,
+      .friend-added .added-badge,
+      .drag-item.moving,
+      .drag-zone,
+      .total-row,
+      .demo-dot {
+        animation: none;
+      }
+      .scene-scan { opacity: 1; }
+      .scan-line { opacity: 1; transform: none; }
+      .demo-dot:first-child { background: var(--primary); }
+    }
+
+    /* Section shared */
+    section { padding: 96px 0; }
+
+    .section-label {
+      font-size: 0.8125rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      margin-bottom: 12px;
+    }
+
+    .section-title {
+      font-size: clamp(1.75rem, 3vw, 2.25rem);
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      margin-bottom: 16px;
+    }
+
+    .section-desc {
+      font-size: 1.0625rem;
+      color: var(--muted);
+      max-width: 560px;
+    }
+
+    .section-header {
+      text-align: center;
+      margin-bottom: 64px;
+    }
+
+    .section-header .section-desc { margin: 0 auto; }
+
+    /* Features */
+    .features {
+      border-top: 1px solid var(--border);
+    }
+
+    .features-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+      gap: clamp(40px, 6vw, 88px);
+      align-items: start;
+    }
+
+    .features-intro {
+      position: sticky;
+      top: 104px;
+    }
+
+    .features-intro .section-label { margin-bottom: 16px; }
+
+    .features-intro .section-title {
+      font-size: clamp(2rem, 3.5vw, 2.75rem);
+      line-height: 1.15;
+      margin-bottom: 20px;
+    }
+
+    .features-intro .section-desc {
+      font-size: 1.0625rem;
+      max-width: none;
+    }
+
+    .features-list {
+      border-top: 1px solid var(--border);
+    }
+
+    .feature-row {
+      display: grid;
+      grid-template-columns: 28px 1fr;
+      gap: 20px 24px;
+      padding: 36px 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .feature-row svg {
+      width: 22px;
+      height: 22px;
+      color: var(--primary);
+      margin-top: 3px;
+    }
+
+    .feature-row h3 {
+      font-size: 1.125rem;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+      margin-bottom: 6px;
+    }
+
+    .feature-row p {
+      font-size: 0.9375rem;
+      color: var(--muted);
+      line-height: 1.55;
+    }
+
+    /* How it works */
+    .how-it-works {
+      background: var(--card);
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .how-header {
+      max-width: 520px;
+      margin-bottom: 48px;
+    }
+
+    .how-header .section-label { margin-bottom: 16px; }
+
+    .how-header .section-title {
+      font-size: clamp(2rem, 3.5vw, 2.75rem);
+      line-height: 1.15;
+      margin-bottom: 16px;
+    }
+
+    .how-header .section-desc { max-width: none; }
+
+    .steps-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 20px;
+    }
+
+    .step-card {
+      background: var(--bg);
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .step-preview {
+      background: var(--card);
+      border-bottom: 1px solid var(--border);
+      padding: 28px 24px;
+      min-height: 148px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: none;
+      border-radius: 0;
+    }
+
+    .step-preview > * {
+      width: 100%;
+      max-width: 240px;
+    }
+
+    .step-content {
+      padding: 24px 28px 28px;
+    }
+
+    .step-index {
+      display: block;
+      font-size: 0.75rem;
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+      color: var(--muted);
+      letter-spacing: 0.04em;
+      margin-bottom: 10px;
+    }
+
+    .step-content h3 {
+      font-size: 1.0625rem;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+      margin-bottom: 8px;
+    }
+
+    .step-content p {
+      font-size: 0.9375rem;
+      color: var(--muted);
+      line-height: 1.55;
+    }
+
+    /* Step preview: receipt */
+    .preview-receipt {
+      font-family: ui-monospace, "SF Mono", Menlo, monospace;
+      font-size: 0.6875rem;
+      line-height: 1.7;
+      color: var(--muted);
+    }
+
+    .preview-receipt .line {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .preview-receipt .line strong { color: var(--primary); font-weight: 500; }
+
+    .preview-receipt .divider {
+      border-top: 1px dashed var(--border);
+      margin: 8px 0;
+    }
+
+    /* Step preview: friends */
+    .preview-friends {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .preview-friend {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 10px 6px 6px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      font-size: 0.75rem;
+      font-weight: 500;
+    }
+
+    .preview-friend .avatar {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: var(--primary);
+      color: var(--btn-text);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.5625rem;
+      font-weight: 700;
+    }
+
+    /* Step preview: drag */
+    .preview-drag {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .preview-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 10px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 0.75rem;
+      font-weight: 500;
+    }
+
+    .preview-item .price {
+      color: var(--muted);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .preview-item.highlight {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 1px var(--primary);
+    }
+
+    .preview-target {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 10px;
+      border: 1.5px dashed var(--card-border);
+      border-radius: 8px;
+      font-size: 0.6875rem;
+      color: var(--muted);
+    }
+
+    .preview-target .avatar {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: var(--primary);
+      color: var(--btn-text);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.5rem;
+      font-weight: 700;
+    }
+
+    /* Step preview: totals */
+    .preview-totals {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .preview-total-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.75rem;
+    }
+
+    .preview-total-row .name { font-weight: 500; }
+
+    .preview-total-row .amount {
+      font-variant-numeric: tabular-nums;
+      color: var(--muted);
+    }
+
+    .preview-total-row.final {
+      margin-top: 4px;
+      padding-top: 8px;
+      border-top: 1px solid var(--border);
+      font-weight: 600;
+    }
+
+    .preview-total-row.final .amount { color: var(--primary); }
+
+    /* CTA */
+    .cta {
+      padding: 80px 0;
+    }
+
+    .cta-card {
+      background: var(--primary);
+      color: var(--btn-text);
+      border-radius: 24px;
+      padding: 64px 48px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 40px;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .cta-content { position: relative; z-index: 1; }
+
+    .cta h2 {
+      font-size: clamp(1.5rem, 3vw, 2rem);
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      margin-bottom: 12px;
+    }
+
+    .cta p {
+      color: rgba(255, 255, 255, 0.7);
+      font-size: 1.0625rem;
+      margin-bottom: 28px;
+      max-width: 420px;
+    }
+
+    .cta .btn {
+      background: var(--bg);
+      color: var(--primary);
+    }
+
+    .cta-mascot {
+      width: 180px;
+      height: auto;
+      mix-blend-mode: screen;
+      opacity: 0.9;
+      flex-shrink: 0;
+      position: relative;
+      z-index: 1;
+    }
+
+    /* Footer */
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 48px 0 32px;
+    }
+
+    .footer-grid {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 40px;
+      margin-bottom: 40px;
+    }
+
+    .footer-brand p {
+      font-size: 0.875rem;
+      color: var(--muted);
+      margin-top: 12px;
+      max-width: 280px;
+    }
+
+    .footer-links {
+      display: flex;
+      gap: 48px;
+    }
+
+    .footer-col h4 {
+      font-size: 0.8125rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--muted);
+      margin-bottom: 16px;
+    }
+
+    .footer-col a {
+      display: block;
+      font-size: 0.9375rem;
+      color: var(--primary);
+      margin-bottom: 10px;
+      transition: color 0.2s;
+    }
+
+    .footer-col a:hover { color: var(--muted); }
+
+    .footer-bottom {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-top: 24px;
+      border-top: 1px solid var(--border);
+      font-size: 0.8125rem;
+      color: var(--muted);
+    }
+
+    /* Corner logo */
+    .corner-logo {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      z-index: 90;
+      pointer-events: none;
+      line-height: 0;
+    }
+
+    .corner-logo img {
+      display: block;
+      width: 132px;
+      height: auto;
+      mix-blend-mode: multiply;
+      transform: translate(-12%, 42%) rotate(32deg);
+      transform-origin: 70% 18%;
+    }
+
+    /* Mobile nav toggle */
+    .menu-toggle {
+      display: none;
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 8px;
+      color: var(--primary);
+    }
+
+    /* Responsive */
+    @media (max-width: 900px) {
+      .hero-grid { grid-template-columns: 1fr; text-align: center; }
+      .hero p { margin-left: auto; margin-right: auto; }
+      .hero-actions { justify-content: center; }
+      .hero-visual { order: -1; }
+      .corner-logo img {
+        width: 108px;
+      }
+      .features-layout { grid-template-columns: 1fr; }
+      .features-intro { position: static; }
+      .steps-grid { grid-template-columns: 1fr; }
+      .cta-card { flex-direction: column; text-align: center; padding: 48px 32px; }
+      .cta p { margin-left: auto; margin-right: auto; }
+      .cta-mascot { width: 120px; }
+      .footer-grid { flex-direction: column; }
+    }
+
+    @media (max-width: 640px) {
+      nav { display: none; }
+      nav.open {
+        display: flex;
+        flex-direction: column;
+        position: absolute;
+        top: 72px;
+        left: 0;
+        right: 0;
+        background: var(--bg);
+        border-bottom: 1px solid var(--border);
+        padding: 24px;
+        gap: 20px;
+      }
+      .menu-toggle { display: block; }
+      header .btn { display: none; }
+      nav.open + .btn,
+      .header-inner nav.open ~ .btn { display: inline-flex; }
+      .step-content { padding: 20px 24px 24px; }
+      .footer-links { flex-direction: column; gap: 32px; }
+      .footer-bottom { flex-direction: column; gap: 12px; text-align: center; }
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="container header-inner">
+      <a href="index.html" class="logo">tabbi</a>
+      <nav id="nav">
+        <a href="#how-it-works">How it works</a>
+        <a href="#features">Features</a>
+      </nav>
+      <button class="menu-toggle" id="menu-toggle" aria-label="Toggle menu">
+        <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
+        </svg>
+      </button>
+      <a href="#download" class="btn">Get the app</a>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="container hero-grid">
+        <div class="hero-content">
+          <h1>Split any receipt in seconds</h1>
+          <p>Snap a photo of your receipt, then drag each item to the person who ordered it. No math, no awkward conversations — just fair splits.</p>
+          <div class="hero-actions">
+            <a href="#download" class="btn">Download tabbi</a>
+            <a href="#how-it-works" class="btn btn-outline">See how it works</a>
+          </div>
+        </div>
+        <div class="hero-visual">
+          <div class="hero-demo" aria-hidden="true">
+            <div class="hero-phone">
+              <div class="hero-phone-body">
+                <div class="scan-flash"></div>
+
+                <div class="hero-scene scene-scan">
+                  <p class="scene-label">Scanning receipt</p>
+                  <div class="scan-line"><span>Margherita pizza</span><span>$18.00</span></div>
+                  <div class="scan-line"><span>Caesar salad</span><span>$14.00</span></div>
+                  <div class="scan-line"><span>Sparkling water</span><span>$6.00</span></div>
+                  <div class="scan-line"><span>Garlic bread</span><span>$8.00</span></div>
+                </div>
+
+                <div class="hero-scene scene-friends">
+                  <p class="scene-label">Add your friends</p>
+                  <div class="friend-add-bar">
+                    <div class="friend-input-field">
+                      <span class="friend-typing t1">Alex</span>
+                      <span class="friend-typing t2">Jordan</span>
+                      <span class="friend-typing t3">Sam</span>
+                      <span class="friend-typing t4">Morgan</span>
+                      <span class="typing-cursor"></span>
+                    </div>
+                    <span class="friend-add-btn">Add</span>
+                  </div>
+                  <div class="friends-added-list">
+                    <div class="friend-added a1">
+                      <span class="avatar">A</span>
+                      <span class="name">Alex</span>
+                      <span class="added-badge">Added</span>
+                    </div>
+                    <div class="friend-added a2">
+                      <span class="avatar">J</span>
+                      <span class="name">Jordan</span>
+                      <span class="added-badge">Added</span>
+                    </div>
+                    <div class="friend-added a3">
+                      <span class="avatar">S</span>
+                      <span class="name">Sam</span>
+                      <span class="added-badge">Added</span>
+                    </div>
+                    <div class="friend-added a4">
+                      <span class="avatar">M</span>
+                      <span class="name">Morgan</span>
+                      <span class="added-badge">Added</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="hero-scene scene-drag">
+                  <p class="scene-label">Drag to assign</p>
+                  <div class="drag-items">
+                    <div class="drag-item"><span>Margherita pizza</span><span class="price">$18.00</span></div>
+                    <div class="drag-item moving"><span>Caesar salad</span><span class="price">$14.00</span></div>
+                    <div class="drag-item"><span>Sparkling water</span><span class="price">$6.00</span></div>
+                  </div>
+                  <div class="drag-zone"><span class="avatar">J</span> Jordan</div>
+                </div>
+
+                <div class="hero-scene scene-totals">
+                  <p class="scene-label">Who owes what</p>
+                  <div class="total-row">
+                    <span class="person"><span class="avatar">A</span> Alex</span>
+                    <span class="amount">$22.40</span>
+                  </div>
+                  <div class="total-row">
+                    <span class="person"><span class="avatar">J</span> Jordan</span>
+                    <span class="amount">$19.60</span>
+                  </div>
+                  <div class="total-row">
+                    <span class="person"><span class="avatar">S</span> Sam</span>
+                    <span class="amount">$8.00</span>
+                  </div>
+                </div>
+
+                <div class="demo-dots">
+                  <span class="demo-dot"></span>
+                  <span class="demo-dot"></span>
+                  <span class="demo-dot"></span>
+                  <span class="demo-dot"></span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="features" id="features">
+      <div class="container">
+        <div class="features-layout">
+          <div class="features-intro">
+            <p class="section-label">Why tabbi</p>
+            <h2 class="section-title">Every item accounted for</h2>
+            <p class="section-desc">Most split apps make you guess portions or divide everything evenly. tabbi reads the actual receipt and lets you assign each line item to whoever ordered it.</p>
+          </div>
+          <div class="features-list">
+            <div class="feature-row">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+                <circle cx="12" cy="13" r="4"/>
+              </svg>
+              <div>
+                <h3>Reads the receipt for you</h3>
+                <p>Photograph the check and tabbi pulls out every line item — no typing, no squinting at faded thermal paper.</p>
+              </div>
+            </div>
+            <div class="feature-row">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M18 11V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v0"/>
+                <path d="M14 10V4a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v2"/>
+                <path d="M10 10.5V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v8"/>
+                <path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-1.42-1.42"/>
+              </svg>
+              <div>
+                <h3>Drag items to people</h3>
+                <p>Assign dishes with a drag. Shared appetizers? Drop the same item on multiple people and tabbi splits the cost.</p>
+              </div>
+            </div>
+            <div class="feature-row">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <line x1="12" y1="1" x2="12" y2="23"/>
+                <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+              </svg>
+              <div>
+                <h3>Tax and tip included</h3>
+                <p>Each person sees a final number before anyone reaches for their wallet. No calculator, no "I'll Venmo you later."</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="how-it-works" id="how-it-works">
+      <div class="container">
+        <div class="how-header">
+          <p class="section-label">How it works</p>
+          <h2 class="section-title">Four steps to a fair split</h2>
+          <p class="section-desc">From photo to settled tab — usually under a minute, still at the table.</p>
+        </div>
+        <div class="steps-grid">
+          <article class="step-card">
+            <div class="step-preview">
+              <div class="preview-receipt">
+                <div class="line"><strong>Margherita pizza</strong><span>$18.00</span></div>
+                <div class="line"><strong>Caesar salad</strong><span>$14.00</span></div>
+                <div class="line"><strong>Sparkling water</strong><span>$6.00</span></div>
+                <div class="divider"></div>
+                <div class="line"><span>Subtotal</span><span>$38.00</span></div>
+              </div>
+            </div>
+            <div class="step-content">
+              <span class="step-index">01</span>
+              <h3>Snap the receipt</h3>
+              <p>Open tabbi and photograph the check while you're still seated.</p>
+            </div>
+          </article>
+          <article class="step-card">
+            <div class="step-preview">
+              <div class="preview-friends">
+                <span class="preview-friend"><span class="avatar">A</span> Alex</span>
+                <span class="preview-friend"><span class="avatar">J</span> Jordan</span>
+                <span class="preview-friend"><span class="avatar">S</span> Sam</span>
+                <span class="preview-friend"><span class="avatar">M</span> Morgan</span>
+              </div>
+            </div>
+            <div class="step-content">
+              <span class="step-index">02</span>
+              <h3>Add your friends</h3>
+              <p>Invite everyone at the table or add names manually.</p>
+            </div>
+          </article>
+          <article class="step-card">
+            <div class="step-preview">
+              <div class="preview-drag">
+                <div class="preview-item highlight">
+                  <span>Caesar salad</span>
+                  <span class="price">$14.00</span>
+                </div>
+                <div class="preview-target">
+                  <span class="avatar">J</span>
+                  Drop on Jordan
+                </div>
+              </div>
+            </div>
+            <div class="step-content">
+              <span class="step-index">03</span>
+              <h3>Drag each item</h3>
+              <p>Pull line items to whoever ordered them. Shared dishes go to multiple people.</p>
+            </div>
+          </article>
+          <article class="step-card">
+            <div class="step-preview">
+              <div class="preview-totals">
+                <div class="preview-total-row">
+                  <span class="name">Alex</span>
+                  <span class="amount">$22.40</span>
+                </div>
+                <div class="preview-total-row">
+                  <span class="name">Jordan</span>
+                  <span class="amount">$19.60</span>
+                </div>
+                <div class="preview-total-row final">
+                  <span class="name">Sam</span>
+                  <span class="amount">$8.00</span>
+                </div>
+              </div>
+            </div>
+            <div class="step-content">
+              <span class="step-index">04</span>
+              <h3>See who owes what</h3>
+              <p>Everyone gets their total with tax and tip. Settle up however you usually do.</p>
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="cta" id="download">
+      <div class="container">
+        <div class="cta-card">
+          <div class="cta-content">
+            <h2>Ready to split smarter?</h2>
+            <p>Download tabbi and never argue over the bill again.</p>
+            <a href="#" class="btn">Coming soon to App Store</a>
+          </div>
+          <img src="assets/mascot.png" alt="tabbi mascot" class="cta-mascot">
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="container">
+      <div class="footer-grid">
+        <div class="footer-brand">
+          <a href="index.html" class="logo">tabbi</a>
+          <p>Split receipts with friends by dragging items to each person. Simple, fair, and fast.</p>
+        </div>
+        <div class="footer-links">
+          <div class="footer-col">
+            <h4>Product</h4>
+            <a href="#how-it-works">How it works</a>
+            <a href="#features">Features</a>
+            <a href="#download">Download</a>
+          </div>
+          <div class="footer-col">
+            <h4>Legal</h4>
+            <a href="privacy-policy.html">Privacy Policy</a>
+            <a href="terms-of-use.html">Terms of Use</a>
+          </div>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <span>© 2026 tabbi. All rights reserved.</span>
+        <span>Made with care for dinner with friends.</span>
+      </div>
+    </div>
+  </footer>
+
+  <div class="corner-logo" aria-hidden="true">
+    <img src="assets/mascot.png" alt="">
+  </div>
+
+  <script>
+    document.getElementById('menu-toggle').addEventListener('click', function () {
+      document.getElementById('nav').classList.toggle('open');
+    });
+  </script>
+</body>
+</html>
